@@ -22,7 +22,7 @@ jobs:
             unzip -o "$ZIP_FILE" -d ./src_extracted
           fi
 
-      - name: Locate Project & Auto-Patch Lint Issues
+      - name: Locate Project & Auto-Patch
         id: locate
         run: |
           SETTINGS_PATH=$(find . -name "settings.gradle.kts" | head -n 1)
@@ -34,17 +34,15 @@ jobs:
           echo "project_dir=$PROJ_DIR" >> $GITHUB_OUTPUT
           echo "Project root: $PROJ_DIR"
 
-          # Ensure proguard-rules.pro always exists
           if [ ! -f "$PROJ_DIR/app/proguard-rules.pro" ]; then
-            cat << 'EOF' > "$PROJ_DIR/app/proguard-rules.pro"
-          -keepattributes *Annotation*
-          -keep class com.harindra.tvlauncher.** { *; }
-          -dontwarn kotlin.**
-          -dontwarn androidx.**
-          EOF
+            printf '%s\n' \
+              '-keepattributes *Annotation*' \
+              '-keep class com.harindra.tvlauncher.** { *; }' \
+              '-dontwarn kotlin.**' \
+              '-dontwarn androidx.**' \
+              > "$PROJ_DIR/app/proguard-rules.pro"
           fi
 
-          # Remove setHasFixedSize(true) to avoid RecyclerView lint error
           MAIN_KT="$PROJ_DIR/app/src/main/java/com/harindra/tvlauncher/MainActivity.kt"
           if [ -f "$MAIN_KT" ]; then
             sed -i '/setHasFixedSize(true)/d' "$MAIN_KT"
@@ -78,14 +76,16 @@ jobs:
           KEY_ALIAS: ultratv
           KEY_PASSWORD: ultratv123
         run: |
-          gradle assembleRelease assembleDebug -x lintVitalRelease -x lint --no-daemon
+          gradle assembleRelease assembleDebug --no-daemon
 
       - name: Prepare Final APKs
         working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
           mkdir -p ${{ github.workspace }}/output_apks
-          cp app/build/outputs/apk/release/app-release.apk ${{ github.workspace }}/output_apks/UltraTV-Pro-Release.apk
-          cp app/build/outputs/apk/debug/app-debug.apk ${{ github.workspace }}/output_apks/UltraTV-Pro-Debug.apk
+          REL_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          DBG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          cp "$REL_APK" ${{ github.workspace }}/output_apks/UltraTV-Pro-Release.apk
+          cp "$DBG_APK" ${{ github.workspace }}/output_apks/UltraTV-Pro-Debug.apk
           ls -lh ${{ github.workspace }}/output_apks/
 
       - name: Upload APKs
